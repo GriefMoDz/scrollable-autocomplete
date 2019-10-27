@@ -1,0 +1,10 @@
+{
+  "name": "Scrollable Autocomplete",
+  "version": "1.0.0",
+  "description": "Adds a nifty-looking scrollbar to the emoji and Powercord command autocomplete.",
+  "author": "Harley#1051",
+  "license": "MIT",
+  "optionalDependencies": [
+    "pc-emojiUtility"
+  ]
+}
