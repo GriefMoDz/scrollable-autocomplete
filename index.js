@@ -35,7 +35,8 @@ class ScrollableAutocomplete extends Plugin {
           this.props.children[1] = React.createElement(VerticalScroller, {
             className: classes.scroller,
             theme: classes.themeGhostHairline,
-            style: { height: '360px' }
+            style: { height: '360px' },
+            keyboardScroll: true
           }, autocompletes);
         }
       }
