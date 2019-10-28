@@ -52,14 +52,16 @@ class ScrollableAutocomplete extends Plugin {
       const direction = args[0];
       const selection = this.state.selectedAutocomplete;
       const selectedAutocomplete = document.querySelector(`.${classes.selectorSelected.split(' ')[0]}`);
-      const scroller = selectedAutocomplete.parentNode.parentNode;
+      if (selectedAutocomplete) {
+        const scroller = selectedAutocomplete.parentNode.parentNode;
 
-      if (selection + direction >= this.getAutocompletes().length) {
-        scroller.scrollTop = 0;
-      } else if (selection + direction < 0) {
-        scroller.scrollTop = scroller.scrollHeight;
-      } else {
-        scroller.scrollTop = selectedAutocomplete.offsetTop - 32;
+        if (selection + direction >= this.getAutocompletes().length) {
+          scroller.scrollTop = 0;
+        } else if (selection + direction < 0) {
+          scroller.scrollTop = scroller.scrollHeight;
+        } else {
+          scroller.scrollTop = selectedAutocomplete.offsetTop - 32;
+        }
       }
 
       return res;
