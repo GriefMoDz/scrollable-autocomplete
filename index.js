@@ -31,7 +31,7 @@ class ScrollableAutocomplete extends Plugin {
       if (this.props.children) {
         const autocompletes = this.props.children[1];
 
-        if (autocompletes.length > 10) {
+        if (autocompletes && autocompletes.length > 10) {
           this.props.children[1] = React.createElement(VerticalScroller, {
             className: classes.scroller,
             theme: classes.themeGhostHairline,
@@ -47,26 +47,50 @@ class ScrollableAutocomplete extends Plugin {
 
   async patchAutocompleteSelection () {
     const { classes } = this;
-    const ChannelTextArea = await getModuleByDisplayName('ChannelTextArea');
-    inject('scrollableAutocomplete-selection', ChannelTextArea.prototype, 'moveSelection', function (args, res) {
-      const direction = args[0];
-      const selection = this.state.selectedAutocomplete;
-      const selectedAutocomplete = document.querySelector(`.${classes.selectorSelected.split(' ')[0]}`);
-      if (selectedAutocomplete) {
-        const scroller = selectedAutocomplete.parentNode.parentNode;
+    const PlainTextArea = await getModuleByDisplayName('PlainTextArea');
+    inject('scrollableAutocomplete-selection', PlainTextArea.prototype, 'render', function (args, res) {
+      const { moveSelection } = this.props;
 
-        if (selection + direction >= this.getAutocompletes().length) {
-          scroller.scrollTop = 0;
-        } else if (selection + direction < 0) {
-          scroller.scrollTop = scroller.scrollHeight;
-        } else {
-          scroller.scrollTop = selectedAutocomplete.offsetTop - 32;
+      this.props.moveSelection = function (direction) {
+        const channelTextArea = {};
+        channelTextArea.props = res._owner.return.return.return.memoizedProps;
+        channelTextArea.state = res._owner.return.return.return.memoizedState;
+
+        const { autocompletes } = channelTextArea.props;
+        const { selectedAutocomplete: selection } = channelTextArea.state;
+
+        function getAutocompletes () {
+          const autocompletions = [];
+          if (autocompletes) {
+            for (const autocomplete in autocompletes) {
+              autocompletes[autocomplete].forEach(autocomplete => autocompletions.push(autocomplete));
+            }
+          }
+
+          return autocompletions;
         }
-      }
+
+        const selectedAutocomplete = document.querySelector(`.${classes.selectorSelected.split(' ')[0]}`);
+
+        if (selectedAutocomplete) {
+          const scroller = selectedAutocomplete.parentNode.parentNode;
+
+          if (selection + direction >= getAutocompletes().length) {
+            scroller.scrollTop = 0;
+          } else if (selection + direction < 0) {
+            scroller.scrollTop = scroller.scrollHeight;
+          } else {
+            scroller.scrollTop = selectedAutocomplete.offsetTop - 32;
+          }
+        }
+
+        return moveSelection(direction);
+      };
 
       return res;
     });
 
+    const ChannelTextArea = await getModuleByDisplayName('ChannelTextArea');
     inject('scrollableAutocomplete-selectTop', ChannelTextArea.prototype, 'componentDidUpdate', (args) => {
       const state = args[1];
 
