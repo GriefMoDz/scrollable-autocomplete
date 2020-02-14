@@ -2,13 +2,16 @@ const { Plugin } = require('powercord/entities');
 const { React, getModule, getModuleByDisplayName } = require('powercord/webpack');
 const { inject, uninject } = require('powercord/injector');
 
+let classes;
+setImmediate(async () => {
+  classes = {
+    ...await getModule([ 'scrollbar', 'scrollerWrap' ]),
+    ...await getModule([ 'autocompleteRow', 'selectorSelected' ])
+  };
+});
+
 class ScrollableAutocomplete extends Plugin {
   async startPlugin () {
-    this.classes = {
-      ...await getModule([ 'scrollbar', 'scrollerWrap' ]),
-      ...await getModule([ 'autocompleteRow', 'selectorSelected' ])
-    };
-
     this.patchAutocomplete();
     this.patchAutocompleteSelection();
 
@@ -24,7 +27,6 @@ class ScrollableAutocomplete extends Plugin {
   }
 
   async patchAutocomplete () {
-    const { classes } = this;
     const VerticalScroller = await getModuleByDisplayName('VerticalScroller');
     const Autocomplete = await getModuleByDisplayName('Autocomplete');
     inject('scrollableAutocomplete-scrollbar', Autocomplete.prototype, 'render', function (_, res) {
@@ -46,57 +48,40 @@ class ScrollableAutocomplete extends Plugin {
   }
 
   async patchAutocompleteSelection () {
-    const { classes } = this;
-    const PlainTextArea = await getModuleByDisplayName('PlainTextArea');
-    inject('scrollableAutocomplete-selection', PlainTextArea.prototype, 'render', function (args, res) {
-      const { moveSelection } = this.props;
+    const ChannelEditorContainer = await getModuleByDisplayName('ChannelEditorContainer');
+    inject('scrollableAutocomplete-selection', ChannelEditorContainer.prototype, 'render', function (_, res) {
+      const { autocompleteRef } = this.props;
 
-      this.props.moveSelection = function (direction) {
-        const channelTextArea = {};
-        channelTextArea.props = res._owner.return.return.return.memoizedProps;
-        channelTextArea.state = res._owner.return.return.return.memoizedState;
+      if (autocompleteRef.current) {
+        const autocomplete = autocompleteRef.current;
+        const { moveSelection } = autocomplete;
 
-        const { autocompletes } = channelTextArea.props;
-        const { selectedAutocomplete: selection } = channelTextArea.state;
+        autocomplete.moveSelection = (direction) => {
+          const selectedAutocomplete = document.querySelector(`.${classes.selectorSelected.split(' ')[0]}`);
 
-        function getAutocompletes () {
-          const autocompletions = [];
-          if (autocompletes) {
-            for (const autocomplete in autocompletes) {
-              autocompletes[autocomplete].forEach(autocomplete => autocompletions.push(autocomplete));
+          if (selectedAutocomplete) {
+            const scroller = selectedAutocomplete.parentNode.parentNode;
+
+            if (autocomplete.state.selectedAutocomplete + direction >= autocomplete.getAutocompletes().length) {
+              scroller.scrollTop = 0;
+            } else if (autocomplete.state.selectedAutocomplete + direction < 0) {
+              scroller.scrollTop = scroller.scrollHeight;
+            } else {
+              scroller.scrollTop = selectedAutocomplete.offsetTop - 32;
             }
           }
 
-          return autocompletions;
-        }
-
-        const selectedAutocomplete = document.querySelector(`.${classes.selectorSelected.split(' ')[0]}`);
-
-        if (selectedAutocomplete) {
-          const scroller = selectedAutocomplete.parentNode.parentNode;
-
-          if (selection + direction >= getAutocompletes().length) {
-            scroller.scrollTop = 0;
-          } else if (selection + direction < 0) {
-            scroller.scrollTop = scroller.scrollHeight;
-          } else {
-            scroller.scrollTop = selectedAutocomplete.offsetTop - 32;
-          }
-        }
-
-        return moveSelection(direction);
-      };
+          return moveSelection(direction);
+        };
+      }
 
       return res;
     });
 
-    const ChannelTextArea = await getModuleByDisplayName('ChannelTextArea');
-    inject('scrollableAutocomplete-selectTop', ChannelTextArea.prototype, 'componentDidUpdate', (args) => {
+    const ChannelAutocomplete = await getModuleByDisplayName('ChannelAutocomplete');
+    inject('scrollableAutocomplete-selectTop', ChannelAutocomplete.prototype, 'componentDidUpdate', (args) => {
       const state = args[1];
-
-      if (!state.autocompleteType && !state.selectedAutocomplete !== 0) {
-        state.selectedAutocomplete = 0;
-      }
+      state.selectedAutocomplete = 0;
 
       return args;
     });
