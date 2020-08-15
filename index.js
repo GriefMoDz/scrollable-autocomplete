@@ -17,28 +17,24 @@ class ScrollableAutocomplete extends Plugin {
 
     this.results = await getModule([ 'queryEmojiResults' ]);
     this.results.__oldQueryEmojiResults = this.results.queryEmojiResults;
-    this.results.queryEmojiResults = function (e, t) {
-      const emojis = getModule([ 'initialize', 'search' ], false).search(t, e);
-
-      return { emojis };
+    this.results.queryEmojiResults = function (query, channel) {
+      return { emojis: getModule([ 'initialize', 'search' ], false).search(channel, query) };
     };
 
     this.reloadEmojiUtility();
   }
 
   async patchAutocomplete () {
-    const VerticalScroller = await getModuleByDisplayName('VerticalScroller');
+    const Scroller = await getModule([ 'AdvancedScrollerThin' ]);
     const Autocomplete = await getModuleByDisplayName('Autocomplete');
     inject('scrollableAutocomplete-scrollbar', Autocomplete.prototype, 'render', function (_, res) {
       if (this.props.children) {
         const autocompletes = this.props.children[1];
 
         if (autocompletes && autocompletes.length > 10) {
-          this.props.children[1] = React.createElement(VerticalScroller, {
-            className: classes.scroller,
-            theme: classes.themeGhostHairline,
-            style: { height: '360px' },
-            keyboardScroll: true
+          this.props.children[1] = React.createElement(Scroller.AdvancedScrollerThin, {
+            fade: true,
+            style: { height: '360px' }
           }, autocompletes);
         }
       }
