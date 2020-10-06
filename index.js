@@ -1,16 +1,19 @@
 const { Plugin } = require('powercord/entities');
 const { React, getModule, getModuleByDisplayName } = require('powercord/webpack');
+const { AdvancedScrollerThin } = require('powercord/components');
 const { inject, uninject } = require('powercord/injector');
-
-let classes;
-setImmediate(async () => {
-  classes = {
-    ...await getModule([ 'scrollbar', 'scrollerWrap' ]),
-    ...await getModule([ 'autocompleteRow', 'selectorSelected' ])
-  };
-});
+const { findInReactTree } = require('powercord/util');
 
 class ScrollableAutocomplete extends Plugin {
+  constructor () {
+    super();
+
+    this.classes = {
+      ...getModule([ 'scrollbar', 'scrollerWrap' ], false),
+      ...getModule([ 'autocomplete', 'autocompleteInner' ], false)
+    };
+  }
+
   async startPlugin () {
     this.patchAutocomplete();
     this.patchAutocompleteSelection();
@@ -25,15 +28,14 @@ class ScrollableAutocomplete extends Plugin {
   }
 
   async patchAutocomplete () {
-    const Scroller = await getModule([ 'AdvancedScrollerThin' ]);
     const Autocomplete = await getModuleByDisplayName('Autocomplete');
-    inject('scrollableAutocomplete-scrollbar', Autocomplete.prototype, 'render', function (_, res) {
-      if (this.props.children) {
-        const autocompletes = this.props.children[1];
+    inject('scrollableAutocomplete-scrollbar', Autocomplete.prototype, 'render', (_, res) => {
+      const autocompleteInner = findInReactTree(res, n => Array.isArray(n));
+      if (autocompleteInner && autocompleteInner[0]) {
+        const autocompletes = autocompleteInner[0].props.children[1];
 
-        if (autocompletes && autocompletes.length > 10) {
-          this.props.children[1] = React.createElement(Scroller.AdvancedScrollerThin, {
-            fade: true,
+        if (autocompletes && autocompletes.length > 10 && !autocompleteInner[0].props.children[1].style) {
+          autocompleteInner[0].props.children[1] = React.createElement(AdvancedScrollerThin, {
             style: { height: '360px' }
           }, autocompletes);
         }
@@ -44,42 +46,36 @@ class ScrollableAutocomplete extends Plugin {
   }
 
   async patchAutocompleteSelection () {
-    const ChannelEditorContainer = await getModuleByDisplayName('ChannelEditorContainer');
-    inject('scrollableAutocomplete-selection', ChannelEditorContainer.prototype, 'render', function (_, res) {
-      const { autocompleteRef } = this.props;
+    const ChannelTextAreaContainer = await getModule(m => m.type && m.type.render && m.type.render.displayName === 'ChannelTextAreaContainer');
+    inject('scrollableAutocomplete-selection', ChannelTextAreaContainer.type, 'render', (_, res) => {
+      const ChannelEditorContainer = findInReactTree(res, n => n.type && n.type.displayName === 'ChannelEditorContainer');
+      if (ChannelEditorContainer) {
+        const { onMoveSelection } = ChannelEditorContainer.props;
 
-      if (autocompleteRef.current) {
-        const autocomplete = autocompleteRef.current;
-        const { moveSelection } = autocomplete;
-
-        autocomplete.moveSelection = (direction) => {
-          const selectedAutocomplete = document.querySelector(`.${classes.selectorSelected.split(' ')[0]}`);
-
+        ChannelEditorContainer.props.onMoveSelection = (index) => {
+          const selectedAutocomplete = document.querySelector(`.${this.classes.selected}`);
           if (selectedAutocomplete) {
             const scroller = selectedAutocomplete.parentNode.parentNode;
+            const autocompleteRows = Array.from(document.querySelectorAll(`.${this.classes.autocompleteRow} > .${this.classes.selectable}`));
+            const state = {
+              selectedAutocomplete: autocompleteRows.findIndex(row => row === selectedAutocomplete),
+              autocompletes: autocompleteRows.length
+            };
 
-            if (autocomplete.state.selectedAutocomplete + direction >= autocomplete.getAutocompletes().length) {
+            if (state.selectedAutocomplete + index >= state.autocompletes) {
               scroller.scrollTop = 0;
-            } else if (autocomplete.state.selectedAutocomplete + direction < 0) {
+            } else if (state.selectedAutocomplete + index < 0) {
               scroller.scrollTop = scroller.scrollHeight;
             } else {
               scroller.scrollTop = selectedAutocomplete.offsetTop - 32;
             }
           }
 
-          return moveSelection(direction);
+          return onMoveSelection(index);
         };
       }
 
       return res;
-    });
-
-    const ChannelAutocomplete = await getModuleByDisplayName('ChannelAutocomplete');
-    inject('scrollableAutocomplete-selectTop', ChannelAutocomplete.prototype, 'componentDidUpdate', (args) => {
-      const state = args[1];
-      state.selectedAutocomplete = 0;
-
-      return args;
     });
   }
 
@@ -88,7 +84,6 @@ class ScrollableAutocomplete extends Plugin {
 
     uninject('scrollableAutocomplete-scrollbar');
     uninject('scrollableAutocomplete-selection');
-    uninject('scrollableAutocomplete-selectTop');
 
     this.reloadEmojiUtility();
   }
