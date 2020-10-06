@@ -32,13 +32,15 @@ class ScrollableAutocomplete extends Plugin {
     inject('scrollableAutocomplete-scrollbar', Autocomplete.prototype, 'render', (_, res) => {
       const autocompleteInner = findInReactTree(res, n => Array.isArray(n));
       if (autocompleteInner && autocompleteInner[0]) {
-        const autocompletes = autocompleteInner[0].props.children[1];
+        try {
+          const autocompletes = autocompleteInner[0].props.children[1];
 
-        if (autocompletes && autocompletes.length > 10 && !autocompleteInner[0].props.children[1].style) {
-          autocompleteInner[0].props.children[1] = React.createElement(AdvancedScrollerThin, {
-            style: { height: '360px' }
-          }, autocompletes);
-        }
+          if (autocompletes && autocompletes.length > 10 && !autocompleteInner[0].props.children[1].style) {
+            autocompleteInner[0].props.children[1] = React.createElement(AdvancedScrollerThin, {
+              style: { height: '360px' }
+            }, autocompletes);
+          }
+        } catch (_) {}
       }
 
       return res;
@@ -49,7 +51,7 @@ class ScrollableAutocomplete extends Plugin {
     const ChannelTextAreaContainer = await getModule(m => m.type && m.type.render && m.type.render.displayName === 'ChannelTextAreaContainer');
     inject('scrollableAutocomplete-selection', ChannelTextAreaContainer.type, 'render', (_, res) => {
       const ChannelEditorContainer = findInReactTree(res, n => n.type && n.type.displayName === 'ChannelEditorContainer');
-      if (ChannelEditorContainer) {
+      try {
         const { onMoveSelection } = ChannelEditorContainer.props;
 
         ChannelEditorContainer.props.onMoveSelection = (index) => {
@@ -73,7 +75,7 @@ class ScrollableAutocomplete extends Plugin {
 
           return onMoveSelection(index);
         };
-      }
+      } catch (_) {}
 
       return res;
     });
