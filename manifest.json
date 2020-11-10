@@ -1,9 +1,9 @@
 {
   "name": "Scrollable Autocomplete",
-  "version": "1.3.1",
-  "description": "Adds a nifty-looking scrollbar to the emoji and Powercord command autocomplete.",
+  "version": "1.3.2",
+  "description": "Adds a nifty-looking scrollbar to the emoji autocomplete and also keyboard scrolling to Powercord commands.",
   "author": "M|-|4r13y ツ#1051",
-  "license": "MIT",
+  "license": "OSL-3.0",
   "optionalDependencies": [
     "pc-emojiUtility"
   ]
