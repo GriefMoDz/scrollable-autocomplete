@@ -96,9 +96,10 @@ class ScrollableAutocomplete extends Plugin {
 
         ChannelEditorContainer.props.onMoveSelection = (index) => {
           const selectedAutocomplete = document.querySelector(`.${this.classes.selected}`);
-          if (selectedAutocomplete) {
-            const scroller = this.getScroller() || selectedAutocomplete.parentNode.parentNode;
-            const autocompleteRows = Array.from(document.querySelectorAll(`.${this.classes.autocompleteRow} > .${this.classes.selectable}`));
+          const autocompleteRows = Array.from(document.querySelectorAll(`.${this.classes.autocompleteRow} > .${this.classes.selectable}`));
+          const scroller = this.getScroller() || document.querySelector(`.${this.classes.autocompleteRow} ~ div`);
+
+          if (selectedAutocomplete && scroller) {
             const state = {
               selectedAutocomplete: autocompleteRows.findIndex(row => row === selectedAutocomplete),
               autocompletes: autocompleteRows.length

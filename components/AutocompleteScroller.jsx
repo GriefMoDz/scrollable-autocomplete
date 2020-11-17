@@ -59,13 +59,21 @@ module.exports = class AutocompleteScroller extends React.PureComponent {
   }
 
   loadMore () {
-    this.setState({ loadingMore: !0 });
+    this.setState({
+      hasMore: this.props.autocompletes.length !== this.state.lastAutocomplete,
+      loadingMore: !0
+    });
 
     setTimeout(() => {
+      let lastAutocomplete = null;
+
+      if (!this.state.lastAutocomplete) {
+        lastAutocomplete = Math.min(15, this.props.autocompletes.length);
+      }
+
       this.setState({
-        hasMore: this.props.autocompletes.length !== this.state.lastAutocomplete,
         loadingMore: !1,
-        lastAutocomplete: this.state.lastAutocomplete ? Math.min(this.state.lastAutocomplete + 15, this.props.autocompletes.length) : 15
+        lastAutocomplete: lastAutocomplete || Math.min(this.state.lastAutocomplete + 15, this.props.autocompletes.length)
       });
     }, 500);
   }
