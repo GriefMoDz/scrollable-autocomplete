@@ -13,7 +13,7 @@
  * your needs please document your changes and make backups before you update.
  *
  *
- * @copyright Copyright (c) 2020 GriefMoDz
+ * @copyright Copyright (c) 2020-2021 GriefMoDz
  * @license   OSL-3.0 (Open Software License ("OSL") v. 3.0)
  * @link      https://github.com/GriefMoDz/scrollable-autocomplete
  *
@@ -62,20 +62,30 @@ class ScrollableAutocomplete extends Plugin {
   async patchEmojiResults () {
     const emojiResults = await getModule([ 'initialize', 'search' ]);
     const autocompleteResults = await getModule([ 'queryEmojiResults' ]);
+
     inject('scrollableAutocomplete-emojis', autocompleteResults, 'queryEmojiResults', ([ query, channel ]) => (
       { emojis: emojiResults.search(channel, query) }
     ));
+
+    const { AUTOCOMPLETE_OPTIONS: AutocompleteTypes } = await getModule([ 'AUTOCOMPLETE_OPTIONS' ]);
+    inject('scrollableAutocomplete-emojis-result', AutocompleteTypes.EMOJIS_AND_STICKERS, 'queryResults', ([ channel, query, state ], res) => {
+      res.emojis = autocompleteResults.queryEmojiResults(
+        query, channel, state.canUseExternalEmoji === null || state.canUseExternalEmoji
+      ).emojis;
+
+      return res;
+    });
   }
 
   async patchAutocomplete () {
     const Autocomplete = await getModuleByDisplayName('Autocomplete');
     inject('scrollableAutocomplete-scrollbar', Autocomplete.prototype, 'render', (_, res) => {
-      const autocompleteInner = findInReactTree(res, n => Array.isArray(n));
-      if (autocompleteInner && autocompleteInner[0]) {
+      const autocompleteInner = findInReactTree(res, n => n.key && Array.isArray(n.props.children));
+      if (autocompleteInner && autocompleteInner.props.children[1]) {
         try {
-          const autocompletes = autocompleteInner[0].props.children[1];
-          if (autocompletes && autocompletes.length > 10 && !autocompleteInner[0].props.children[1].children) {
-            autocompleteInner[0].props.children[1] = React.createElement(AutocompleteScroller, {
+          const autocompletes = autocompleteInner.props.children[1];
+          if (autocompletes && autocompletes.length > 10 && !autocompletes.children) {
+            autocompleteInner.props.children[1] = React.createElement(AutocompleteScroller, {
               scrollerRef: this.scrollerRef,
               autocompletes
             });
@@ -88,13 +98,13 @@ class ScrollableAutocomplete extends Plugin {
   }
 
   async patchAutocompleteSelection () {
-    const ChannelTextAreaContainer = await getModule(m => m.type && m.type.render && m.type.render.displayName === 'ChannelTextAreaContainer');
+    const ChannelTextAreaContainer = await getModule(m => m.type?.render?.displayName === 'ChannelTextAreaContainer');
     inject('scrollableAutocomplete-selection', ChannelTextAreaContainer.type, 'render', (_, res) => {
       const ChannelEditorContainer = findInReactTree(res, n => n.type?.displayName === 'ChannelEditorContainer');
       try {
         const { onMoveSelection } = ChannelEditorContainer.props;
 
-        ChannelEditorContainer.props.onMoveSelection = (index) => {
+        ChannelEditorContainer.props.onMoveSelection = (direction) => {
           const selectedAutocomplete = document.querySelector(`.${this.classes.selected}`);
           const autocompleteRows = Array.from(document.querySelectorAll(`.${this.classes.autocompleteRow} > .${this.classes.selectable}`));
           const scroller = this.getScroller() || document.querySelector(`.${this.classes.autocompleteRow} ~ div`);
@@ -105,9 +115,9 @@ class ScrollableAutocomplete extends Plugin {
               autocompletes: autocompleteRows.length
             };
 
-            if (state.selectedAutocomplete + index >= state.autocompletes) {
+            if (state.selectedAutocomplete + direction >= state.autocompletes) {
               scroller.spring ? scroller.scrollToTop() : (scroller.scrollTop = 0);
-            } else if (state.selectedAutocomplete + index < 0) {
+            } else if (state.selectedAutocomplete + direction < 0) {
               scroller.spring ? scroller.scrollToBottom() : (scroller.scrollTop = scroller.scrollHeight);
             } else {
               const offset = selectedAutocomplete.offsetTop - 35.6;
@@ -115,7 +125,7 @@ class ScrollableAutocomplete extends Plugin {
             }
           }
 
-          return onMoveSelection(index);
+          return onMoveSelection(direction);
         };
       } catch (_) {}
 
