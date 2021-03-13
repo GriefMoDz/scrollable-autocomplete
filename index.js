@@ -26,7 +26,7 @@
  * SOFTWARE.
  */
 
-/* eslint-disable no-unused-expressions */
+/* eslint-disable no-unused-expressions, prefer-destructuring */
 const { Plugin } = require('powercord/entities');
 const { React, getModule, getModuleByDisplayName } = require('powercord/webpack');
 const { inject, uninject } = require('powercord/injector');
@@ -63,14 +63,20 @@ class ScrollableAutocomplete extends Plugin {
     const emojiResults = await getModule([ 'initialize', 'search' ]);
     const autocompleteResults = await getModule([ 'queryEmojiResults' ]);
 
-    inject('scrollableAutocomplete-emojis', autocompleteResults, 'queryEmojiResults', ([ query, channel ]) => (
-      { emojis: emojiResults.search(channel, query) }
-    ));
+    inject('scrollableAutocomplete-emojis', autocompleteResults, 'queryEmojiResults', ([ ...args ]) => {
+      const temp = args[1];
+      args[1] = args[0];
+      args[0] = temp;
+
+      args.splice(2, 0, null);
+
+      return { emojis: emojiResults.search(...args).unlocked }
+    });
 
     const { AUTOCOMPLETE_OPTIONS: AutocompleteTypes } = await getModule([ 'AUTOCOMPLETE_OPTIONS' ]);
     inject('scrollableAutocomplete-emojis-result', AutocompleteTypes.EMOJIS_AND_STICKERS, 'queryResults', ([ channel, query, state ], res) => {
       res.emojis = autocompleteResults.queryEmojiResults(
-        query, channel, state.canUseExternalEmoji === null || state.canUseExternalEmoji
+        query, channel, state.emojiIntention
       ).emojis;
 
       return res;
@@ -137,6 +143,7 @@ class ScrollableAutocomplete extends Plugin {
 
   pluginWillUnload () {
     uninject('scrollableAutocomplete-emojis');
+    uninject('scrollableAutocomplete-emojis-result');
     uninject('scrollableAutocomplete-scrollbar');
     uninject('scrollableAutocomplete-selection');
 
