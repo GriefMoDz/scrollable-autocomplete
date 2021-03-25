@@ -75,7 +75,7 @@ module.exports = class AutocompleteScroller extends React.PureComponent {
         loadingMore: !1,
         lastAutocomplete: lastAutocomplete || Math.min(this.state.lastAutocomplete + 15, this.props.autocompletes.length)
       });
-    }, 500);
+    }, 250);
   }
 
   getRowHeight (section, row) {

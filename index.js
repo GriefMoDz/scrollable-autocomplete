@@ -33,12 +33,14 @@ const { inject, uninject } = require('powercord/injector');
 const { findInReactTree } = require('powercord/util');
 
 const AutocompleteScroller = require('./components/AutocompleteScroller');
+const EMOJI_UTILITY_ID = 'pc-emojiUtility';
 
 class ScrollableAutocomplete extends Plugin {
   constructor () {
     super();
 
     this.scrollerRef = React.createRef();
+    this.encounteredErrors = {};
     this.classes = {
       ...getModule([ 'scrollbar', 'scrollerWrap' ], false),
       ...getModule([ 'autocomplete', 'autocompleteInner' ], false)
@@ -47,12 +49,11 @@ class ScrollableAutocomplete extends Plugin {
 
   async startPlugin () {
     this.loadStylesheet('./style.css');
-    this.patchEmojiResults();
 
     this.patchAutocomplete();
     this.patchAutocompleteSelection();
 
-    this.reloadEmojiUtility();
+    this.patchEmojiResults().then(this.reloadEmojiUtility);
   }
 
   getScroller () {
@@ -61,23 +62,21 @@ class ScrollableAutocomplete extends Plugin {
 
   async patchEmojiResults () {
     const emojiResults = await getModule([ 'initialize', 'search' ]);
-    const autocompleteResults = await getModule([ 'queryEmojiResults' ]);
-
-    inject('scrollableAutocomplete-emojis', autocompleteResults, 'queryEmojiResults', ([ ...args ]) => {
-      const temp = args[1];
-      args[1] = args[0];
-      args[0] = temp;
-
-      args.splice(2, 0, null);
-
-      return { emojis: emojiResults.search(...args).unlocked }
-    });
 
     const { AUTOCOMPLETE_OPTIONS: AutocompleteTypes } = await getModule([ 'AUTOCOMPLETE_OPTIONS' ]);
     inject('scrollableAutocomplete-emojis-result', AutocompleteTypes.EMOJIS_AND_STICKERS, 'queryResults', ([ channel, query, state ], res) => {
-      res.emojis = autocompleteResults.queryEmojiResults(
-        query, channel, state.emojiIntention
-      ).emojis;
+      try {
+        const emojis = emojiResults.search(channel, query, null, state.emojiIntention);
+        if (emojis.unlocked.length > 0) {
+          res.emojis = emojis.unlocked;
+        }
+
+        if (emojis.locked.length > 0) {
+          res.emojisLocked = emojis.locked;
+        }
+      } catch (err) {
+        this.displayError('scrollableAutocomplete-emojis-result', err);
+      }
 
       return res;
     });
@@ -87,7 +86,7 @@ class ScrollableAutocomplete extends Plugin {
     const Autocomplete = await getModuleByDisplayName('Autocomplete');
     inject('scrollableAutocomplete-scrollbar', Autocomplete.prototype, 'render', (_, res) => {
       const autocompleteInner = findInReactTree(res, n => n.key && Array.isArray(n.props.children));
-      if (autocompleteInner && autocompleteInner.props.children[1]) {
+      if (autocompleteInner) {
         try {
           const autocompletes = autocompleteInner.props.children[1];
           if (autocompletes && autocompletes.length > 10 && !autocompletes.children) {
@@ -96,7 +95,12 @@ class ScrollableAutocomplete extends Plugin {
               autocompletes
             });
           }
-        } catch (_) {}
+        } catch (err) {
+          uninject('scrollableAutocomplete-emojis');
+          uninject('scrollableAutocomplete-emojis-result');
+
+          this.displayError('scrollableAutocomplete-scrollbar', err);
+        }
       }
 
       return res;
@@ -122,18 +126,20 @@ class ScrollableAutocomplete extends Plugin {
             };
 
             if (state.selectedAutocomplete + direction >= state.autocompletes) {
-              scroller.spring ? scroller.scrollToTop() : (scroller.scrollTop = 0);
+              scroller.spring ? scroller.scrollToTop({ animate: true }) : (scroller.scrollTop = 0);
             } else if (state.selectedAutocomplete + direction < 0) {
-              scroller.spring ? scroller.scrollToBottom() : (scroller.scrollTop = scroller.scrollHeight);
+              scroller.spring ? scroller.scrollToBottom({ animate: true }) : (scroller.scrollTop = scroller.scrollHeight);
             } else {
               const offset = selectedAutocomplete.offsetTop - 35.6;
-              scroller.spring ? scroller.scrollTo({ to: offset }) : (scroller.scrollTop = offset);
+              scroller.spring ? scroller.scrollTo({ to: offset, animate: true }) : (scroller.scrollTop = offset);
             }
           }
 
           return onMoveSelection(direction);
         };
-      } catch (_) {}
+      } catch (err) {
+        this.displayError('scrollableAutocomplete-selection', err);
+      }
 
       return res;
     });
@@ -150,9 +156,16 @@ class ScrollableAutocomplete extends Plugin {
     this.reloadEmojiUtility();
   }
 
+  displayError (id, err) {
+    if (!this.encounteredErrors[id]) {
+      this.error(`Failed to patch autocomplete: '${id}' -> ${err} - please contact "${this.manifest.author}" if this error persists!`);
+      this.encounteredErrors[id] = true;
+    }
+  }
+
   reloadEmojiUtility () {
-    if (powercord.pluginManager.get('pc-emojiUtility') && powercord.pluginManager.isEnabled('pc-emojiUtility')) {
-      powercord.pluginManager.remount('pc-emojiUtility');
+    if (powercord.pluginManager.get(EMOJI_UTILITY_ID) && powercord.pluginManager.isEnabled(EMOJI_UTILITY_ID)) {
+      powercord.pluginManager.remount(EMOJI_UTILITY_ID);
     }
   }
 }
