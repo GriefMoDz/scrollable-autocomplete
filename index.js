@@ -67,13 +67,7 @@ class ScrollableAutocomplete extends Plugin {
     inject('scrollableAutocomplete-emojis-result', AutocompleteTypes.EMOJIS_AND_STICKERS, 'queryResults', ([ channel, query, state ], res) => {
       try {
         const emojis = emojiResults.search(channel, query, null, state.emojiIntention);
-        if (emojis.unlocked.length > 0) {
-          res.emojis = emojis.unlocked;
-        }
-
-        if (emojis.locked.length > 0) {
-          res.emojisLocked = emojis.locked;
-        }
+        res.emojis = emojis.unlocked;
       } catch (err) {
         this.displayError('scrollableAutocomplete-emojis-result', err);
       }
