@@ -66,8 +66,8 @@ class ScrollableAutocomplete extends Plugin {
     const { AUTOCOMPLETE_OPTIONS: AutocompleteTypes } = await getModule([ 'AUTOCOMPLETE_OPTIONS' ]);
     inject('scrollableAutocomplete-emojis-result', AutocompleteTypes.EMOJIS_AND_STICKERS, 'queryResults', ([ channel, query, state ], res) => {
       try {
-        const emojis = emojiResults.search(channel, query, null, state.emojiIntention);
-        res.emojis = emojis.unlocked;
+        const emojis = emojiResults.search(channel, state, null) //Hacky Fix, makes bar quite long
+        res.results.emojis = emojis.unlocked;
       } catch (err) {
         this.displayError('scrollableAutocomplete-emojis-result', err);
       }
