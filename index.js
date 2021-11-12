@@ -41,10 +41,7 @@ class ScrollableAutocomplete extends Plugin {
 
     this.scrollerRef = React.createRef();
     this.encounteredErrors = {};
-    this.classes = {
-      ...getModule([ 'scrollbar', 'scrollerWrap' ], false),
-      ...getModule([ 'autocomplete', 'autocompleteInner' ], false)
-    };
+    this.classes = getModule([ 'autocomplete', 'autocompleteRow' ], false);
   }
 
   async startPlugin () {
@@ -52,24 +49,41 @@ class ScrollableAutocomplete extends Plugin {
 
     this.patchAutocomplete();
     this.patchAutocompleteSelection();
-
-    this.patchEmojiResults().then(this.reloadEmojiUtility);
+    this.patchAutocompleteResults().then(this.reloadEmojiUtility);
   }
 
   getScroller () {
     return this.scrollerRef.current;
   }
 
-  async patchEmojiResults () {
-    const emojiResults = await getModule([ 'initialize', 'search' ]);
+  async patchAutocompleteResults () {
+    const emojiResults = await getModule([ 'initialize', 'getCustomEmojiById' ]);
+
+    const AutocompleteUtils = await getModule([ 'queryEmojiResults', 'matchSentinel' ]);
+    inject('scrollableAutocomplete-emoji-results-1', AutocompleteUtils, 'queryEmojiResults', (args, res) => {
+      try {
+        const [ query, channel, intention, state ] = args;
+        const emojis = emojiResults.searchWithoutFetchingLatest(channel, query, null, intention, state);
+        if (emojis && emojis.unlocked && emojis.locked) {
+          res.emojis = emojis;
+        }
+      } catch (err) {
+        this.displayError('scrollableAutocomplete-emoji-results-1', err);
+      }
+
+      return res;
+    });
 
     const { AUTOCOMPLETE_OPTIONS: AutocompleteTypes } = await getModule([ 'AUTOCOMPLETE_OPTIONS' ]);
-    inject('scrollableAutocomplete-emojis-result', AutocompleteTypes.EMOJIS_AND_STICKERS, 'queryResults', ([ channel, query, state ], res) => {
+    inject('scrollableAutocomplete-emoji-results-2', AutocompleteTypes.EMOJIS_AND_STICKERS, 'queryResults', (args, res) => {
       try {
-        const emojis = emojiResults.search(channel, state, null) //Hacky Fix, makes bar quite long
-        res.results.emojis = emojis.unlocked;
+        const [ channel, _, query, intention ] = args;
+        const emojis = emojiResults.searchWithoutFetchingLatest(channel, query, null, intention);
+        if (emojis && emojis.unlocked && emojis.locked) {
+          res.results.emojis = emojis.unlocked;
+        }
       } catch (err) {
-        this.displayError('scrollableAutocomplete-emojis-result', err);
+        this.displayError('scrollableAutocomplete-emoji-results-2', err);
       }
 
       return res;
@@ -79,19 +93,29 @@ class ScrollableAutocomplete extends Plugin {
   async patchAutocomplete () {
     const Autocomplete = await getModuleByDisplayName('Autocomplete');
     inject('scrollableAutocomplete-scrollbar', Autocomplete.prototype, 'render', (_, res) => {
-      const autocompleteInner = findInReactTree(res, n => n.key && Array.isArray(n.props.children));
-      if (autocompleteInner) {
+      const autocompleteList = findInReactTree(res, n => n.props && typeof n.props.children === 'function');
+      if (autocompleteList) {
         try {
-          const autocompletes = autocompleteInner.props.children[1];
-          if (autocompletes && autocompletes.length > 10 && !autocompletes.children) {
-            autocompleteInner.props.children[1] = React.createElement(AutocompleteScroller, {
-              scrollerRef: this.scrollerRef,
-              autocompletes
-            });
-          }
+          autocompleteList.props.children = (oldMethod => (props) => {
+            const res = oldMethod(props);
+            const autocompleteInner = findInReactTree(res, n => n.key && Array.isArray(n.props.children));
+            const autocompleteResults = autocompleteInner?.props?.children[1];
+
+            if (Array.isArray(autocompleteResults)) {
+              if (autocompleteResults && autocompleteResults.length > 10 && !autocompleteResults.children) {
+                autocompleteInner.props.children[1] = React.createElement(AutocompleteScroller, {
+                  scrollerRef: this.scrollerRef,
+                  autocompletes: autocompleteResults
+                });
+              }
+            }
+
+            return res;
+          })(autocompleteList.props.children);
         } catch (err) {
           uninject('scrollableAutocomplete-emojis');
-          uninject('scrollableAutocomplete-emojis-result');
+          uninject('scrollableAutocomplete-emoji-results-1');
+          uninject('scrollableAutocomplete-emoji-results-2');
 
           this.displayError('scrollableAutocomplete-scrollbar', err);
         }
@@ -102,16 +126,16 @@ class ScrollableAutocomplete extends Plugin {
   }
 
   async patchAutocompleteSelection () {
-    const ChannelTextAreaContainer = await getModule(m => m.type?.render?.displayName === 'ChannelTextAreaContainer');
-    inject('scrollableAutocomplete-selection', ChannelTextAreaContainer.type, 'render', (_, res) => {
-      const ChannelEditorContainer = findInReactTree(res, n => n.type?.displayName === 'ChannelEditorContainer');
+    const _this = this;
+    const ChannelEditorContainer = await getModuleByDisplayName('ChannelEditorContainer');
+    inject('scrollableAutocomplete-selection', ChannelEditorContainer.prototype, 'render', function (_, res) {
       try {
-        const { onMoveSelection } = ChannelEditorContainer.props;
+        const { onMoveSelection } = this.props;
 
-        ChannelEditorContainer.props.onMoveSelection = (direction) => {
-          const selectedAutocomplete = document.querySelector(`.${this.classes.selected}`);
-          const autocompleteRows = Array.from(document.querySelectorAll(`.${this.classes.autocompleteRow} > .${this.classes.selectable}`));
-          const scroller = this.getScroller() || document.querySelector(`.${this.classes.autocompleteRow} ~ div`);
+        this.props.onMoveSelection = (direction) => {
+          const selectedAutocomplete = document.querySelector(`.${_this.classes.selected}`);
+          const autocompleteRows = Array.from(document.querySelectorAll(`.${_this.classes.autocompleteRow} > .${_this.classes.selectable}`));
+          const scroller = _this.getScroller() || document.querySelector(`.${_this.classes.autocompleteRow} ~ div`);
 
           if (selectedAutocomplete && scroller) {
             const state = {
@@ -132,18 +156,17 @@ class ScrollableAutocomplete extends Plugin {
           return onMoveSelection(direction);
         };
       } catch (err) {
-        this.displayError('scrollableAutocomplete-selection', err);
+        _this.displayError('scrollableAutocomplete-selection', err);
       }
 
       return res;
     });
-
-    ChannelTextAreaContainer.type.render.displayName = 'ChannelTextAreaContainer';
   }
 
   pluginWillUnload () {
     uninject('scrollableAutocomplete-emojis');
-    uninject('scrollableAutocomplete-emojis-result');
+    uninject('scrollableAutocomplete-emoji-results-1');
+    uninject('scrollableAutocomplete-emoji-results-2');
     uninject('scrollableAutocomplete-scrollbar');
     uninject('scrollableAutocomplete-selection');
 
