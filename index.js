@@ -60,10 +60,10 @@ class ScrollableAutocomplete extends Plugin {
     const emojiResults = await getModule([ 'initialize', 'getCustomEmojiById' ]);
 
     const AutocompleteUtils = await getModule([ 'queryEmojiResults', 'matchSentinel' ]);
-    inject('scrollableAutocomplete-emoji-results-1', AutocompleteUtils, 'queryEmojiResults', (args, res) => {
+    inject('scrollableAutocomplete-emoji-results-1', AutocompleteUtils, 'queryEmojiResults', ([ props ], res) => {
       try {
-        const [ query, channel, intention, state ] = args;
-        const emojis = emojiResults.searchWithoutFetchingLatest(channel, query, null, intention, state);
+        const { query, channel, intention, matchComparator } = props;
+        const emojis = emojiResults.searchWithoutFetchingLatest(channel, query, null, intention, matchComparator);
         if (emojis && emojis.unlocked && emojis.locked) {
           res.emojis = emojis;
         }
